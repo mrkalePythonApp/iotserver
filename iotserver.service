@@ -1,0 +1,12 @@
+[Unit]
+Description=Central IoT server hub communicating through MQTT
+Wants=mosquitto.service
+After=multi-user.target mosquitto.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/iotserver.py -d /var/log -v error -l info /usr/local/etc/iotserver.ini
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

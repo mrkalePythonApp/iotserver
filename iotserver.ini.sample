@@ -1,0 +1,118 @@
+; This is a sample configuration file.
+; All the values enclosed in sharp parentheses, mostly credentials, should be
+; replaced with your real data.
+[DEFAULT]
+; MQTT seed topics
+; Each topic can be considered as a logical group of topics. With added
+; trailing '/#' it can be used as a topic filter.
+mqtt_topic_server = server
+mqtt_topic_server_temp = %(mqtt_topic_server)s/data/temp
+;
+mqtt_topic_iot = %(mqtt_topic_server)s/iot
+mqtt_topic_iot_command = %(mqtt_topic_iot)s/cmd
+;
+mqtt_topic_fan = %(mqtt_topic_server)s/fan
+mqtt_topic_fan_command = %(mqtt_topic_fan)s/cmd
+mqtt_topic_fan_status = %(mqtt_topic_fan)s/state
+; mqtt_topic_fan_data = %(mqtt_topic_fan)s/data
+;
+mqtt_topic_iot = %(mqtt_topic_server)s/iot
+
+[MQTTbroker]
+; Hardcoded default - the hostname
+clientid = <mqtt_clientid>
+; Hardcoded default - localhost
+host = localhost
+; Hardcoded default - 1883
+port = 1883
+; Registered user for logging to MQTT broker
+username = <mqtt_username>
+; Password of MQTT registered user
+password = <mqtt_password>
+; Userdata for MQTT callback functions
+;userdata = dummy
+
+[MQTTfilters]
+; Topics with wildcards aimed for topic filtering
+; Usually only to these wildcard topics a client subscribes. Single topics
+; are utilized for comparing and selecting only. The retain parameter is expressed
+; in form of a number, where its absolute integer convertion 0 mean False,
+; otherwise True.
+; topic = topicName, topicQos, topicRetain
+; Examples:
+; fan_dummy = %(mqtt_topic_fan)s/dummy/#, 1, 0
+; fan_dummy = %(mqtt_topic_fan)s/dummy/+/something/#, 2, 1
+server_temp = %(mqtt_topic_server_temp)s/#
+;
+iot_filter_command = %(mqtt_topic_iot_command)s/#
+;
+fan_filter_status = %(mqtt_topic_fan_status)s/#
+
+[MQTTtopics]
+; Theese single topics are utilized for publishing and in callbacks
+; for comparing and selecting. The retain parameter is expressed in form of
+; a number, where its absolute integer convertion 0 mean False, otherwise True.
+; topic = topicName, topicQos, topicRetain
+; Example:
+; fan_dummy = %(mqtt_topic_fan)s/dummy, 0, 1
+server_temp_value = %(mqtt_topic_server_temp)s/val
+server_temp_percentage = %(mqtt_topic_server_temp)s/perc
+; Topics for Last Will and Testament
+lwt_fan = %(mqtt_topic_fan_status)s, 0, 1
+lwt_iot = %(mqtt_topic_fan_status)s, 0, 1
+; Topics for IoT server
+iot_command_control = %(mqtt_topic_iot_command)s/control
+; Topics for cooling fan
+fan_command_control = %(mqtt_topic_fan_command)s/control
+fan_status_control = %(mqtt_topic_fan_status)s/control
+; fan_status_percon = %(mqtt_topic_fan_status)s/perc/on
+; fan_status_percoff = %(mqtt_topic_fan_status)s/perc/off
+; fan_status_tempon = %(mqtt_topic_fan_status)s/temp/on
+; fan_status_tempoff = %(mqtt_topic_fan_status)s/temp/off
+; fan_status_tempmax = %(mqtt_topic_fan_status)s/temp/max
+; fan_data_percon = %(mqtt_topic_fan_data)s/perc/on
+; fan_data_percoff = %(mqtt_topic_fan_data)s/perc/off
+
+[TimerMqtt]
+; Period in seconds for testing connection and attempting to reconnect
+; to a MQTT broker.
+; Hardcoded default 15.0s, hardcoded valid range 5 ~ 180s
+period_reconnect = 30.0
+
+[ThingSpeak]
+; Hardcoded default - the hostname
+clientid = <thingspeak_clientid>
+; Hardcoded default 1883
+port = 1883
+; Parameters without hardcoded default value
+host = mqtt.thingspeak.com
+mqtt_api_key = <ThingSpeak_mqtt_apikey>
+; Testing channel Test - Chalupa
+channel_id = <ThingSpeak_channel_id>
+write_api_key = <ThingSpeak_write_apikey>
+; Publish delay limit in seconds
+; Published messages sent sooner after previous messages are ignored by ThingSpeak
+; Hardcoded default 15.0s
+publish_delay = 15.0
+; Data field numbers 1 .. 8
+; Hardcoded default 1
+field_temp = 1
+; Hardcoded default 2
+field_fan = 2
+; Period in seconds for publishing to the cloud. Should be longer than publish delay.
+; Hardcoded default 600.0s = 1.0 min
+period_publish = 60.0
+
+[Blynk]
+blynk_auth = <Blynk_apikey>
+; Virtual pins
+; Temperature gauge
+vpin_temp = 1
+; Fan status LED
+vpin_fan_led = 2
+; Fan control button
+vpin_fan_btn = 3
+; Fan set temperature percentage for fan on
+;vpin_fan_percon = 4
+; Fan set temperature percentage for fan off
+;vpin_fan_percoff = 5
