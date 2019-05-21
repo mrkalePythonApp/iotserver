@@ -156,7 +156,7 @@ def mqtt_reconnect():
 
 
 def mqtt_publish_iot_lwt_online():
-    """Publish IoTn online status to the MQTT LWT topic."""
+    """Publish IoT online status to the MQTT LWT topic."""
     if not mqtt.get_connected():
         return
     cfg_option = IoT.LWT
@@ -171,6 +171,28 @@ def mqtt_publish_iot_lwt_online():
     except Exception as errmsg:
         logger.error(
             "Publishing LWT %s to MQTT topic %s failed: %s",
+            message,
+            mqtt.topic_name(cfg_option, cfg_section),
+            errmsg,
+        )
+
+
+def mqtt_publish_cmd_fan_status():
+    """Publish command for getting server cooling fan statuses."""
+    if not mqtt.get_connected():
+        return
+    cfg_option = "fan_command_control"
+    cfg_section = mqtt.GROUP_TOPICS
+    message = IoT.CMD_STATUS
+    try:
+        mqtt.publish(message, cfg_option, cfg_section)
+        logger.debug(
+            "Published server cooling fan command %s to MQTT topic %s",
+            message, mqtt.topic_name(cfg_option, cfg_section),
+        )
+    except Exception as errmsg:
+        logger.error(
+            "Publishing cooling fan command %s to MQTT topic %s failed: %s",
             message,
             mqtt.topic_name(cfg_option, cfg_section),
             errmsg,
@@ -368,7 +390,7 @@ def cbMqtt_on_message_command(client, userdata, message):
     if not mqtt_message_log(message):
         return
     command = message.payload.decode("utf-8")
-    if message.topic == mqtt.topic_name("fan_command_control"):
+    if message.topic == mqtt.topic_name("iot_command_control"):
         logger.debug(
             "Received IoT command %s from topic %s",
             command, message.topic)
@@ -377,7 +399,59 @@ def cbMqtt_on_message_command(client, userdata, message):
     else:
         logger.warning(
             "Received unknown command %s from topic %s",
-            message.payload.decode("utf-8"), message.topic)
+            command, message.topic)
+
+
+def cbMqtt_on_message_status_fan(client, userdata, message):
+    """Process received status of a server cooling fan.
+
+    Arguments
+    ---------
+    client : object
+        MQTT client instance for this callback.
+    userdata
+        The private user data.
+    message : MQTTMessage object
+        The object with members `topic`, `payload`, `qos`, `retain`.
+
+    Notes
+    -----
+    - The topic that the client subscribes to and the message match the topic
+      filter for server commands.
+
+    """
+    if not mqtt_message_log(message):
+        return
+    status = message.payload.decode("utf-8")
+    # Last will and testament
+    if message.topic == mqtt.topic_name("mqtt_topic_fan_status",
+                                        mqtt.DEFAULT):
+        if status == Fan.ONLINE:
+            pass
+        elif status == Fan.OFFLINE:
+            pass
+    # Work change
+    elif message.topic == mqtt.topic_name("fan_status_control"):
+        if status == Fan.RUNNING:
+            pass
+        elif status == Fan.IDLE:
+            pass
+    # Status parameters
+    elif message.topic == mqtt.topic_name("fan_status_percon"):
+        pass
+    elif message.topic == mqtt.topic_name("fan_status_percoff"):
+        pass
+    elif message.topic == mqtt.topic_name("fan_status_tempon"):
+        pass
+    elif message.topic == mqtt.topic_name("fan_status_tempoff"):
+        pass
+    elif message.topic == mqtt.topic_name("fan_status_tempmax"):
+        pass
+    # Unexpected status
+    else:
+        logger.warning(
+            "Received unknown server cooling fan status %s from topic %s",
+            status, message.topic)
 
 
 ###############################################################################
@@ -506,6 +580,7 @@ def setup_mqtt_filters():
     mqtt.callback_filters(
         iot_filter_command=cbMqtt_on_message_command,
         server_temp=cbMqtt_on_message_data,
+        fan_filter_status=cbMqtt_on_message_status_fan,
     )
     try:
         mqtt.subscribe_filters()

@@ -10,6 +10,7 @@ mqtt_topic_server_temp = %(mqtt_topic_server)s/data/temp
 ;
 mqtt_topic_iot = %(mqtt_topic_server)s/iot
 mqtt_topic_iot_command = %(mqtt_topic_iot)s/cmd
+mqtt_topic_iot_status = %(mqtt_topic_iot)s/state
 ;
 mqtt_topic_fan = %(mqtt_topic_server)s/fan
 mqtt_topic_fan_command = %(mqtt_topic_fan)s/cmd
@@ -45,6 +46,7 @@ password = <mqtt_password>
 server_temp = %(mqtt_topic_server_temp)s/#
 ;
 iot_filter_command = %(mqtt_topic_iot_command)s/#
+iot_filter_status = %(mqtt_topic_iot_status)s/#
 ;
 fan_filter_status = %(mqtt_topic_fan_status)s/#
 
@@ -59,17 +61,17 @@ server_temp_value = %(mqtt_topic_server_temp)s/val
 server_temp_percentage = %(mqtt_topic_server_temp)s/perc
 ; Topics for Last Will and Testament
 lwt_fan = %(mqtt_topic_fan_status)s, 0, 1
-lwt_iot = %(mqtt_topic_fan_status)s, 0, 1
+lwt_iot = %(mqtt_topic_iot_status)s, 0, 1
 ; Topics for IoT server
 iot_command_control = %(mqtt_topic_iot_command)s/control
 ; Topics for cooling fan
 fan_command_control = %(mqtt_topic_fan_command)s/control
 fan_status_control = %(mqtt_topic_fan_status)s/control
-; fan_status_percon = %(mqtt_topic_fan_status)s/perc/on
-; fan_status_percoff = %(mqtt_topic_fan_status)s/perc/off
-; fan_status_tempon = %(mqtt_topic_fan_status)s/temp/on
-; fan_status_tempoff = %(mqtt_topic_fan_status)s/temp/off
-; fan_status_tempmax = %(mqtt_topic_fan_status)s/temp/max
+fan_status_percon = %(mqtt_topic_fan_status)s/perc/on
+fan_status_percoff = %(mqtt_topic_fan_status)s/perc/off
+fan_status_tempon = %(mqtt_topic_fan_status)s/temp/on
+fan_status_tempoff = %(mqtt_topic_fan_status)s/temp/off
+fan_status_tempmax = %(mqtt_topic_fan_status)s/temp/max
 ; fan_data_percon = %(mqtt_topic_fan_data)s/perc/on
 ; fan_data_percoff = %(mqtt_topic_fan_data)s/perc/off
 
