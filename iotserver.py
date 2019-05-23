@@ -122,6 +122,7 @@ def check_service():
 ###############################################################################
 def action_exit():
     """Perform all activities right before exiting the script."""
+    modTimer.stop_timers()
     mqtt.disconnect()
 
 
@@ -218,14 +219,16 @@ def mqtt_message_log(message):
         Module for MQTT processing.
 
     """
-    logger.debug(
-        "Message from MQTT topic %s with qos %s and retain %s",
-        message.topic, message.qos, message.retain)
     if message.payload is None:
-        return False
-    logger.debug("%s: %s", sys._getframe(1).f_code.co_name,
-                 message.payload.decode("utf-8"))
-    return True
+        payload = "None"
+    else:
+        payload = message.payload.decode("utf-8")
+    logger.debug(
+        "%s -- MQTT topic %s, QoS=%s, retain=%s: %s",
+        sys._getframe(1).f_code.co_name,
+        message.topic, message.qos, bool(message.retain), payload,
+    )
+    return message.payload is not None
 
 
 ###############################################################################
@@ -361,7 +364,7 @@ def cbMqtt_on_message_data(client, userdata, message):
     # Server temperature percentage
     elif message.topic == mqtt.topic_name("server_temp_percentage"):
         value = float(message.payload)
-        logger.debug("Received server temperature percentage %s°C", value)
+        logger.debug("Received server temperature percentage %s%%", value)
     # Unexpected data
     else:
         logger.warning(
@@ -423,35 +426,40 @@ def cbMqtt_on_message_status_fan(client, userdata, message):
     if not mqtt_message_log(message):
         return
     status = message.payload.decode("utf-8")
+    msg_prefix = "Received server cooling fan"
+    try:
+        value = float(status)
+    except ValueError:
+        value = None
     # Last will and testament
     if message.topic == mqtt.topic_name("mqtt_topic_fan_status",
-                                        mqtt.DEFAULT):
+                                        mqtt.GROUP_DEFAULT):
+        logger.debug("%s LWT %s", msg_prefix, status)
         if status == Fan.ONLINE:
             pass
         elif status == Fan.OFFLINE:
             pass
     # Work change
     elif message.topic == mqtt.topic_name("fan_status_control"):
+        logger.debug("%s status %s", msg_prefix, status)
         if status == Fan.RUNNING:
             pass
         elif status == Fan.IDLE:
             pass
     # Status parameters
     elif message.topic == mqtt.topic_name("fan_status_percon"):
-        pass
+        logger.debug("%s percentage ON %s%%", msg_prefix, value)
     elif message.topic == mqtt.topic_name("fan_status_percoff"):
-        pass
+        logger.debug("%s percentage OFF %s%%", msg_prefix, value)
     elif message.topic == mqtt.topic_name("fan_status_tempon"):
-        pass
+        logger.debug("%s temperature ON %s°C", msg_prefix, value)
     elif message.topic == mqtt.topic_name("fan_status_tempoff"):
-        pass
+        logger.debug("%s temperature OFF %s°C", msg_prefix, value)
     elif message.topic == mqtt.topic_name("fan_status_tempmax"):
-        pass
+        logger.debug("%s temperature MAX %s°C", msg_prefix, value)
     # Unexpected status
     else:
-        logger.warning(
-            "Received unknown server cooling fan status %s from topic %s",
-            status, message.topic)
+        logger.warning("%s uknown status %s", msg_prefix, status)
 
 
 ###############################################################################

@@ -16,8 +16,6 @@ mqtt_topic_fan = %(mqtt_topic_server)s/fan
 mqtt_topic_fan_command = %(mqtt_topic_fan)s/cmd
 mqtt_topic_fan_status = %(mqtt_topic_fan)s/state
 ; mqtt_topic_fan_data = %(mqtt_topic_fan)s/data
-;
-mqtt_topic_iot = %(mqtt_topic_server)s/iot
 
 [MQTTbroker]
 ; Hardcoded default - the hostname
