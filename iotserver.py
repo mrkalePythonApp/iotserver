@@ -32,8 +32,8 @@ import os.path
 import sys
 import argparse
 import logging
-import psutil
 # Third party modules
+import gbj_pythonlib_sw.utils as modUtils
 import gbj_pythonlib_sw.config as modConfig
 import gbj_pythonlib_sw.mqtt as modMQTT
 import gbj_pythonlib_sw.timer as modTimer
@@ -74,6 +74,18 @@ class Fan:
         )
 
 
+class Script:
+    """Script parameters."""
+
+    (
+        fullname, basename, name,
+        running, service
+    ) = (
+            None, None, None,
+            True, False,
+        )
+
+
 ###############################################################################
 # Mapping commands to actions and vice-versa
 ###############################################################################
@@ -86,35 +98,15 @@ map_command = {
 ###############################################################################
 # Script global variables
 ###############################################################################
-script_run = True  # Flag about running script in a loop
 cmdline = None  # Object with command line arguments
 logger = None  # Object with standard logging
 config = None  # Object with MQTT configuration file processing
 mqtt = None  # Object for MQTT broker manipulation
 
-script_pathname = ''  # Name of this script including full path
-script_basename = ''  # Name of this script excluding path but with extension
-script_name = ''  # Bare name of this script
-service_flag = False  # Flag determining running script as a service
-
 
 ###############################################################################
 # Helper functions
 ###############################################################################
-def check_service():
-    """Detect running script as a service.
-
-    Returns
-    -------
-    bool
-        Flag about running script as a service.
-
-    """
-    ls = []
-    for p in psutil.process_iter(attrs=['name']):
-        if p.info['name'] == script_name:
-            ls.append(p)
-    return len(ls) > 0
 
 
 ###############################################################################
@@ -139,12 +131,11 @@ def action_iot(action, value=None):
     """
     # Cancel script
     if action == Action.SCRIPT_EXIT:
-        if service_flag:
+        if Script.service:
             logger.warning("Exiting the script in service mode is prohibited")
         else:
             logger.warning("Stop script")
-            global script_run
-            script_run = False
+            Script.running = False
 
 
 ###############################################################################
@@ -467,16 +458,15 @@ def cbMqtt_on_message_status_fan(client, userdata, message):
 ###############################################################################
 def setup_params():
     """Determine script operational parameters."""
-    global script_fullname, script_basename, script_name, service_flag
-    script_fullname = os.path.splitext(os.path.abspath(__file__))[0]
-    script_basename = os.path.basename(__file__)
-    script_name = os.path.splitext(script_basename)[0]
-    service_flag = check_service()
+    Script.fullname = os.path.splitext(os.path.abspath(__file__))[0]
+    Script.basename = os.path.basename(__file__)
+    Script.name = os.path.splitext(Script.basename)[0]
+    Script.service = modUtils.check_service(Script.name)
 
 
 def setup_cmdline():
     """Define command line arguments."""
-    config_file = script_fullname + ".ini"
+    config_file = Script.fullname + ".ini"
     log_folder = "/var/log"
 
     parser = argparse.ArgumentParser(
@@ -501,7 +491,7 @@ def setup_cmdline():
     parser.add_argument(
         "-v", "--verbose",
         choices=["debug", "info", "warning", "error", "critical"],
-        default="warning",
+        default="debug",
         help="Level of logging to the console."
     )
     parser.add_argument(
@@ -529,7 +519,7 @@ def setup_logger():
     """Configure logging facility."""
     global logger
     # Set logging to file for module and script logging
-    log_file = "/".join([cmdline.logdir, script_basename + ".log"])
+    log_file = "/".join([cmdline.logdir, Script.basename + ".log"])
     logging.basicConfig(
         level=getattr(logging, cmdline.loglevel.upper()),
         format="%(asctime)s - %(levelname)-8s - %(name)s: %(message)s",
@@ -542,7 +532,7 @@ def setup_logger():
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(getattr(logging, cmdline.verbose.upper()))
     console_handler.setFormatter(formatter)
-    logger = logging.getLogger("{} {}".format(script_basename, __version__))
+    logger = logging.getLogger("{} {}".format(Script.basename, __version__))
     logger.addHandler(console_handler)
     logger.info("Script started from file %s", os.path.abspath(__file__))
 
@@ -625,17 +615,17 @@ def setup():
     if cmdline.configuration:
         print(config.get_content())
     # Running mode
-    if service_flag:
-        logger.info("Script runs as the service %s.service", script_name)
+    if Script.service:
+        logger.info("Script runs as the service %s.service", Script.name)
     else:
-        logger.info("Script %s runs in standalone mode", script_name)
+        logger.info("Script %s runs in standalone mode", Script.name)
 
 
 def loop():
     """Wait for keyboard or system exit."""
     try:
         logger.info("Script loop started")
-        while (script_run):
+        while (Script.running):
             time.sleep(0.01)
         logger.info("Script finished")
     except (KeyboardInterrupt, SystemExit):
