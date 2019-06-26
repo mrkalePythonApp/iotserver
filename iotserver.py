@@ -54,9 +54,9 @@ class IoT:
     """Data related to IoT server."""
 
     (
-        LWT, ONLINE, OFFLINE,
+        LWT,
     ) = (
-            "lwt_iot", "Online", "Offline",
+            "iot_lwt",
         )
 
 
@@ -64,13 +64,9 @@ class Fan:
     """Data related to cooling fan."""
 
     (
-        LWT, ONLINE, OFFLINE,
-        RUNNING, IDLE,
-        CMD_STATUS,
+        LWT, CMD_STATUS,
     ) = (
-            "lwt_fan", "Online", "Offline",
-            "Running", "Idle",
-            "STATUS",
+            "fan_lwt", "STATUS",
         )
 
 
@@ -153,7 +149,7 @@ def mqtt_publish_iot_lwt_online():
         return
     cfg_option = IoT.LWT
     cfg_section = mqtt.GROUP_TOPICS
-    message = IoT.ONLINE
+    message = modUtils.Status.ONLINE
     try:
         mqtt.publish(message, cfg_option, cfg_section)
         logger.debug(
