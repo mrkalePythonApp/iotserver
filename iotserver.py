@@ -101,8 +101,20 @@ mqtt = None  # Object for MQTT broker manipulation
 
 
 ###############################################################################
-# Helper functions
+# Data for processing
 ###############################################################################
+""" Container with data received form MQTT topic and aimed for processing by
+    the script. The indexing hierarcy is in the order:
+    Device - Parameter - Measure - Value
+"""
+iot_data = {
+    'system': {
+        'temperature': {
+            'value': None,
+            'percentage': None,
+        }
+    }
+}
 
 
 ###############################################################################
@@ -329,37 +341,7 @@ def cbMqtt_on_message(client, userdata, message):
         return
 
 
-def cbMqtt_on_message_data(client, userdata, message):
-    """Process received data from MQTT topics.
-
-    Arguments
-    ---------
-    client : object
-        MQTT client instance for this callback.
-    userdata
-        The private user data.
-    message : MQTTMessage object
-        The object with members `topic`, `payload`, `qos`, `retain`.
-
-    """
-    if not mqtt_message_log(message):
-        return
-    # Server temperature value
-    if message.topic == mqtt.topic_name("server_temp_value"):
-        value = float(message.payload)
-        logger.debug("Received server temperature value %s°C", value)
-    # Server temperature percentage
-    elif message.topic == mqtt.topic_name("server_temp_percentage"):
-        value = float(message.payload)
-        logger.debug("Received server temperature percentage %s%%", value)
-    # Unexpected data
-    else:
-        logger.warning(
-            "Received unknown data %s from topic %s",
-            message.payload.decode("utf-8"), message.topic)
-
-
-def cbMqtt_on_message_command(client, userdata, message):
+def cbMqtt_iot(client, userdata, message):
     """Process command at receiving a message from the command topic(s).
 
     Arguments
@@ -392,8 +374,8 @@ def cbMqtt_on_message_command(client, userdata, message):
             command, message.topic)
 
 
-def cbMqtt_on_message_status_fan(client, userdata, message):
-    """Process received status of a server cooling fan.
+def cbMqtt_system(client, userdata, message):
+    """Process MQTT data related to microcomputer itself.
 
     Arguments
     ---------
@@ -404,24 +386,46 @@ def cbMqtt_on_message_status_fan(client, userdata, message):
     message : MQTTMessage object
         The object with members `topic`, `payload`, `qos`, `retain`.
 
-    Notes
-    -----
-    - The topic that the client subscribes to and the message match the topic
-      filter for server commands.
+    """
+    if not mqtt_message_log(message):
+        return
+    msg_prefix = "Received system temperature"
+    try:
+        value = float(message.payload)
+    except ValueError:
+        value = None
+    # SoC temperature value in centigrades
+    if message.topic == mqtt.topic_name("system_temp_value"):
+        iot_data['system']['temperature']['value'] = value
+        logger.debug("%s value %s°C", msg_prefix, value)
+    # SoC temperature percentage of maximal allowed temperature
+    elif message.topic == mqtt.topic_name("system_temp_percentage"):
+        value = float(message.payload)
+        iot_data['system']['temperature']['percentage'] = value
+        logger.debug("%s percentage %s%%", msg_prefix, value)
+
+
+def cbMqtt_fan(client, userdata, message):
+    """Process MQTT data related to the cooling fan.
+
+    Arguments
+    ---------
+    client : object
+        MQTT client instance for this callback.
+    userdata
+        The private user data.
+    message : MQTTMessage object
+        The object with members `topic`, `payload`, `qos`, `retain`.
 
     """
     if not mqtt_message_log(message):
         return
-    status = message.payload.decode("utf-8")
-    msg_prefix = "Received server cooling fan"
-    try:
-        value = float(status)
-    except ValueError:
-        value = None
-    # Last will and testament
+    msg_prefix = "Received cooling fan"
+    # StLast will and testament
     if message.topic == mqtt.topic_name("mqtt_topic_fan_status",
                                         mqtt.GROUP_DEFAULT):
-        logger.debug("%s LWT %s", msg_prefix, status)
+        value = message.payload.decode("utf-8")
+        logger.debug("%s status: %s", msg_prefix, status)
         if status == Fan.ONLINE:
             pass
         elif status == Fan.OFFLINE:
@@ -572,9 +576,9 @@ def setup_mqtt_filters():
 
     """
     mqtt.callback_filters(
-        iot_filter_command=cbMqtt_on_message_command,
-        server_temp=cbMqtt_on_message_data,
-        fan_filter_status=cbMqtt_on_message_status_fan,
+        filter_iot=cbMqtt_iot,
+        filter_system=cbMqtt_system,
+        filter_fan=cbMqtt_fan,
     )
     try:
         mqtt.subscribe_filters()
