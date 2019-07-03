@@ -16,14 +16,14 @@ Script provides following functionalities:
   during running.
 
 """
-__version__ = "0.1.0"
-__status__ = "Alpha"
-__author__ = "Libor Gabaj"
-__copyright__ = "Copyright 2019, " + __author__
+__version__ = '0.1.0'
+__status__ = 'Alpha'
+__author__ = 'Libor Gabaj'
+__copyright__ = 'Copyright 2019, ' + __author__
 __credits__ = [__author__]
-__license__ = "MIT"
+__license__ = 'MIT'
 __maintainer__ = __author__
-__email__ = "libor.gabaj@gmail.com"
+__email__ = 'libor.gabaj@gmail.com'
 
 # Standard library modules
 import time
@@ -32,63 +32,30 @@ import os.path
 import sys
 import argparse
 import logging
+import platform
+
 # Third party modules
 import gbj_pythonlib_sw.utils as modUtils
 import gbj_pythonlib_sw.config as modConfig
 import gbj_pythonlib_sw.mqtt as modMQTT
 import gbj_pythonlib_sw.timer as modTimer
+import gbj_pythonlib_iot.common as iot
+import gbj_pythonlib_iot.system as iot_system
 
 
 ###############################################################################
 # Enumeration and parameter classes
 ###############################################################################
-class Action:
-    """Enumeration of possible actions to be performed."""
-
-    (
-        PARAMS_RESET, GET_STATUS, SCRIPT_EXIT,
-    ) = range(3)
-
-
-class IoT:
-    """Data related to IoT server."""
-
-    (
-        LWT,
-    ) = (
-            "iot_lwt",
-        )
-
-
-class Fan:
-    """Data related to cooling fan."""
-
-    (
-        LWT, CMD_STATUS,
-    ) = (
-            "fan_lwt", "STATUS",
-        )
-
-
 class Script:
     """Script parameters."""
 
     (
         fullname, basename, name,
-        running, service
+        running, service, lwt
     ) = (
             None, None, None,
-            True, False,
+            True, False, 'lwt',
         )
-
-
-###############################################################################
-# Mapping commands to actions and vice-versa
-###############################################################################
-map_command = {
-    "STATUS": Action.GET_STATUS,
-    "EXIT": Action.SCRIPT_EXIT,
-}
 
 
 ###############################################################################
@@ -98,23 +65,9 @@ cmdline = None  # Object with command line arguments
 logger = None  # Object with standard logging
 config = None  # Object with MQTT configuration file processing
 mqtt = None  # Object for MQTT broker manipulation
-
-
-###############################################################################
-# Data for processing
-###############################################################################
-""" Container with data received form MQTT topic and aimed for processing by
-    the script. The indexing hierarcy is in the order:
-    Device - Parameter - Measure - Value
-"""
-iot_data = {
-    'system': {
-        'temperature': {
-            'value': None,
-            'percentage': None,
-        }
-    }
-}
+# Devices
+dev_system = None  # Object for processing system (microcomputer) parameters
+dev_fan = None  # Object for processing cooling fan parameters
 
 
 ###############################################################################
@@ -123,27 +76,8 @@ iot_data = {
 def action_exit():
     """Perform all activities right before exiting the script."""
     modTimer.stop_timers()
+    mqtt_publish_iot_lwt(iot.Status.OFFLINE)
     mqtt.disconnect()
-
-
-def action_iot(action, value=None):
-    """Perform action for the IoT server.
-
-    Arguments
-    ---------
-    action : str
-        Action name to be realized.
-    value
-        Any value that the action should be realized with.
-
-    """
-    # Cancel script
-    if action == Action.SCRIPT_EXIT:
-        if Script.service:
-            logger.warning("Exiting the script in service mode is prohibited")
-        else:
-            logger.warning("Stop script")
-            Script.running = False
 
 
 ###############################################################################
@@ -155,44 +89,23 @@ def mqtt_reconnect():
         return True
 
 
-def mqtt_publish_iot_lwt_online():
-    """Publish IoT online status to the MQTT LWT topic."""
+def mqtt_publish_iot_lwt(status):
+    """Publish script status to the MQTT LWT topic."""
     if not mqtt.get_connected():
         return
-    cfg_option = IoT.LWT
+    cfg_option = Script.lwt
     cfg_section = mqtt.GROUP_TOPICS
-    message = modUtils.Status.ONLINE
+    message = iot.get_status(status)
     try:
         mqtt.publish(message, cfg_option, cfg_section)
         logger.debug(
-            "Published LWT %s to MQTT topic %s",
-            message, mqtt.topic_name(cfg_option, cfg_section),
-        )
-    except Exception as errmsg:
-        logger.error(
-            "Publishing LWT %s to MQTT topic %s failed: %s",
-            message,
+            'Published to LWT MQTT topic %s: %s',
             mqtt.topic_name(cfg_option, cfg_section),
-            errmsg,
-        )
-
-
-def mqtt_publish_cmd_fan_status():
-    """Publish command for getting server cooling fan statuses."""
-    if not mqtt.get_connected():
-        return
-    cfg_option = "fan_command_control"
-    cfg_section = mqtt.GROUP_TOPICS
-    message = IoT.CMD_STATUS
-    try:
-        mqtt.publish(message, cfg_option, cfg_section)
-        logger.debug(
-            "Published server cooling fan command %s to MQTT topic %s",
-            message, mqtt.topic_name(cfg_option, cfg_section),
+            message
         )
     except Exception as errmsg:
         logger.error(
-            "Publishing cooling fan command %s to MQTT topic %s failed: %s",
+            'Publishing %s to LWT MQTT topic %s failed: %s',
             message,
             mqtt.topic_name(cfg_option, cfg_section),
             errmsg,
@@ -221,9 +134,9 @@ def mqtt_message_log(message):
     if message.payload is None:
         payload = "None"
     else:
-        payload = message.payload.decode("utf-8")
+        payload = message.payload.decode('utf-8')
     logger.debug(
-        "%s -- MQTT topic %s, QoS=%s, retain=%s: %s",
+        '%s -- MQTT topic %s, QoS=%s, retain=%s: %s',
         sys._getframe(1).f_code.co_name,
         message.topic, message.qos, bool(message.retain), payload,
     )
@@ -237,13 +150,25 @@ def cbTimer_mqtt_reconnect(*arg, **kwargs):
     """Execute MQTT reconnect."""
     if mqtt.get_connected():
         return
-    logger.warning("Reconnecting to MQTT broker")
+    logger.warning('Reconnecting to MQTT broker')
     try:
         mqtt.reconnect()
     except Exception as errmsg:
         logger.error(
-            "Reconnection to MQTT broker failed with error: %s",
+            'Reconnection to MQTT broker failed with error: %s',
             errmsg)
+
+
+def cbTimer_data(*arg, **kwargs):
+    """Test data."""
+    value = dev_system.get_temperature_current() or 0.0
+    perc = dev_system.calculate_temperature_percentage(value) or 0.0
+    logger.info(
+        'System current temperature: %.1f°C (%.1f%%)',
+        value,
+        perc)
+    value = dev_system.get_temperature_maximal() or 0.0
+    logger.info('System maximal temperature: %.1f°C', value)
 
 
 def cbMqtt_on_connect(client, userdata, flags, rc):
@@ -267,11 +192,11 @@ def cbMqtt_on_connect(client, userdata, flags, rc):
 
     """
     if rc == 0:
-        logger.debug("Connected to %s: %s", str(mqtt), userdata)
+        logger.debug('Connected to %s: %s', str(mqtt), userdata)
         setup_mqtt_filters()
-        mqtt_publish_iot_lwt_online()
+        mqtt_publish_iot_lwt(iot.Status.ONLINE)
     else:
-        logger.error("Connection to MQTT broker failed: %s (rc = %d)",
+        logger.error('Connection to MQTT broker failed: %s (rc = %d)',
                      userdata, rc)
 
 
@@ -293,7 +218,7 @@ def cbMqtt_on_disconnect(client, userdata, rc):
         Description of callback arguments for proper utilizing.
 
     """
-    logger.warning("Disconnected from %s: %s (rc = %d)",
+    logger.warning('Disconnected from %s: %s (rc = %d)',
                    str(mqtt), userdata, rc)
 
 
@@ -341,40 +266,7 @@ def cbMqtt_on_message(client, userdata, message):
         return
 
 
-def cbMqtt_iot(client, userdata, message):
-    """Process command at receiving a message from the command topic(s).
-
-    Arguments
-    ---------
-    client : object
-        MQTT client instance for this callback.
-    userdata
-        The private user data.
-    message : MQTTMessage object
-        The object with members `topic`, `payload`, `qos`, `retain`.
-
-    Notes
-    -----
-    - The topic that the client subscribes to and the message match the topic
-      filter for server commands.
-
-    """
-    if not mqtt_message_log(message):
-        return
-    command = message.payload.decode("utf-8")
-    if message.topic == mqtt.topic_name("iot_command_control"):
-        logger.debug(
-            "Received IoT command %s from topic %s",
-            command, message.topic)
-        action_iot(map_command[command])
-    # Unexpected command
-    else:
-        logger.warning(
-            "Received unknown command %s from topic %s",
-            command, message.topic)
-
-
-def cbMqtt_system(client, userdata, message):
+def cbMqtt_dev_system(client, userdata, message):
     """Process MQTT data related to microcomputer itself.
 
     Arguments
@@ -389,23 +281,26 @@ def cbMqtt_system(client, userdata, message):
     """
     if not mqtt_message_log(message):
         return
-    msg_prefix = "Received system temperature"
     try:
         value = float(message.payload)
     except ValueError:
-        value = None
+        logger.warning('Ignored wrong value: %s', message.payload)
+        return
     # SoC temperature value in centigrades
-    if message.topic == mqtt.topic_name("system_temp_value"):
-        iot_data['system']['temperature']['value'] = value
-        logger.debug("%s value %s°C", msg_prefix, value)
+    if message.topic == mqtt.topic_name('system_temp_cur_value'):
+        dev_system.set_temperature_current(value)
     # SoC temperature percentage of maximal allowed temperature
-    elif message.topic == mqtt.topic_name("system_temp_percentage"):
-        value = float(message.payload)
-        iot_data['system']['temperature']['percentage'] = value
-        logger.debug("%s percentage %s%%", msg_prefix, value)
+    elif message.topic == mqtt.topic_name('system_temp_max_value'):
+        dev_system.set_temperature_maximal(value)
+    else:
+        logger.debug(
+            'Unexpected system topic "%s" with value: "%s"',
+            message.topic,
+            message.payload
+        )
 
 
-def cbMqtt_fan(client, userdata, message):
+def cbMqtt_dev_fan(client, userdata, message):
     """Process MQTT data related to the cooling fan.
 
     Arguments
@@ -420,37 +315,38 @@ def cbMqtt_fan(client, userdata, message):
     """
     if not mqtt_message_log(message):
         return
-    msg_prefix = "Received cooling fan"
-    # StLast will and testament
-    if message.topic == mqtt.topic_name("mqtt_topic_fan_status",
+    status = message.payload.decode('utf-8')
+    try:
+        value = float(message.payload)
+    except ValueError:
+        value = None
+        return
+    # Cooling fan status codes
+    if message.topic == mqtt.topic_name('mqtt_topic_fan_status',
                                         mqtt.GROUP_DEFAULT):
-        value = message.payload.decode("utf-8")
-        logger.debug("%s status: %s", msg_prefix, status)
-        if status == Fan.ONLINE:
-            pass
-        elif status == Fan.OFFLINE:
-            pass
-    # Work change
-    elif message.topic == mqtt.topic_name("fan_status_control"):
-        logger.debug("%s status %s", msg_prefix, status)
-        if status == Fan.RUNNING:
-            pass
-        elif status == Fan.IDLE:
-            pass
+        if status in iot.status_map:
+            dev_fan.set_status(iot.get_status_index(status))
     # Status parameters
-    elif message.topic == mqtt.topic_name("fan_status_percon"):
-        logger.debug("%s percentage ON %s%%", msg_prefix, value)
-    elif message.topic == mqtt.topic_name("fan_status_percoff"):
-        logger.debug("%s percentage OFF %s%%", msg_prefix, value)
-    elif message.topic == mqtt.topic_name("fan_status_tempon"):
-        logger.debug("%s temperature ON %s°C", msg_prefix, value)
-    elif message.topic == mqtt.topic_name("fan_status_tempoff"):
-        logger.debug("%s temperature OFF %s°C", msg_prefix, value)
-    elif message.topic == mqtt.topic_name("fan_status_tempmax"):
-        logger.debug("%s temperature MAX %s°C", msg_prefix, value)
+    elif message.topic == mqtt.topic_name('fan_status_percon') and value:
+        value = dev_system.calculate_temperature_value(value)
+        if value:
+            dev_fan.set_temperature_on(value)
+    elif message.topic == mqtt.topic_name('fan_status_percoff') and value:
+        value = dev_system.calculate_temperature_value(value)
+        if value:
+            dev_fan.set_temperature_off(value)
+    elif message.topic == mqtt.topic_name('fan_status_tempon') and value:
+        dev_fan.set_temperature_on(value)
+    elif message.topic == mqtt.topic_name('fan_status_tempoff') and value:
+        dev_fan.set_temperature_off(value)
+        pass
     # Unexpected status
     else:
-        logger.warning("%s uknown status %s", msg_prefix, status)
+        logger.debug(
+            'Unexpected fan topic "%s" with value: "%s"',
+            message.topic,
+            message.payload
+        )
 
 
 ###############################################################################
@@ -466,49 +362,50 @@ def setup_params():
 
 def setup_cmdline():
     """Define command line arguments."""
-    config_file = Script.fullname + ".ini"
-    log_folder = "/var/log"
+    config_file = Script.fullname + '.ini'
+    log_folder = 'x:/mqtt'
+    # log_folder = '/var/log'
 
     parser = argparse.ArgumentParser(
-        description="Central IoT server hub and MQTT client, version "
+        description='Central IoT server hub and MQTT client, version '
         + __version__
     )
     # Position arguments
     parser.add_argument(
-        "config",
-        type=argparse.FileType("r"),
-        nargs="?",
+        'config',
+        type=argparse.FileType('r'),
+        nargs='?',
         default=config_file,
-        help="Configuration INI file, default: " + config_file
+        help='Configuration INI file, default: ' + config_file
     )
     # Options
     parser.add_argument(
-        "-V", "--version",
-        action="version",
+        '-V', '--version',
+        action='version',
         version=__version__,
-        help="Current version of the script."
+        help='Current version of the script.'
     )
     parser.add_argument(
-        "-v", "--verbose",
-        choices=["debug", "info", "warning", "error", "critical"],
-        default="debug",
-        help="Level of logging to the console."
+        '-v', '--verbose',
+        choices=['debug', 'info', 'warning', 'error', 'critical'],
+        default='debug',
+        help='Level of logging to the console.'
     )
     parser.add_argument(
-        "-l", "--loglevel",
-        choices=["debug", "info", "warning", "error", "critical"],
-        default="debug",
-        help="Level of logging to a log file."
+        '-l', '--loglevel',
+        choices=['debug', 'info', 'warning', 'error', 'critical'],
+        default='debug',
+        help='Level of logging to a log file.'
     )
     parser.add_argument(
-        "-d", "--logdir",
+        '-d', '--logdir',
         default=log_folder,
-        help="Folder of a log file, default " + log_folder
+        help='Folder of a log file, default ' + log_folder
     )
     parser.add_argument(
-        "-c", "--configuration",
-        action="store_true",
-        help="""Print configuration parameters in form of INI file content."""
+        '-c', '--configuration',
+        action='store_true',
+        help='''Print configuration parameters in form of INI file content.'''
     )
     # Process command line arguments
     global cmdline
@@ -519,22 +416,22 @@ def setup_logger():
     """Configure logging facility."""
     global logger
     # Set logging to file for module and script logging
-    log_file = "/".join([cmdline.logdir, Script.basename + ".log"])
+    log_file = '/'.join([cmdline.logdir, Script.basename + '.log'])
     logging.basicConfig(
         level=getattr(logging, cmdline.loglevel.upper()),
-        format="%(asctime)s - %(levelname)-8s - %(name)s: %(message)s",
+        format='%(asctime)s - %(levelname)-8s - %(name)s: %(message)s',
         filename=log_file,
-        filemode="w"
+        filemode='w'
     )
     # Set console logging
     formatter = logging.Formatter(
-        "%(levelname)-8s - %(name)-20s: %(message)s")
+        '%(levelname)-8s - %(name)-20s: %(message)s')
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(getattr(logging, cmdline.verbose.upper()))
     console_handler.setFormatter(formatter)
-    logger = logging.getLogger("{} {}".format(Script.basename, __version__))
+    logger = logging.getLogger('{} {}'.format(Script.basename, __version__))
     logger.addHandler(console_handler)
-    logger.info("Script started from file %s", os.path.abspath(__file__))
+    logger.info('Script started from file %s', os.path.abspath(__file__))
 
 
 def setup_config():
@@ -554,15 +451,16 @@ def setup_mqtt():
         message=cbMqtt_on_message,
     )
     # Last will and testament
-    mqtt.lwt(IoT.OFFLINE, IoT.LWT, mqtt.GROUP_TOPICS)
+    status = iot.get_status(iot.Status.OFFLINE)
+    mqtt.lwt(status, Script.lwt, mqtt.GROUP_TOPICS)
     try:
         mqtt.connect(
-            username=config.option("username", mqtt.GROUP_BROKER),
-            password=config.option("password", mqtt.GROUP_BROKER),
+            username=config.option('username', mqtt.GROUP_BROKER),
+            password=config.option('password', mqtt.GROUP_BROKER),
         )
     except Exception as errmsg:
         logger.error(
-            "Connection to MQTT broker failed with error: %s",
+            'Connection to MQTT broker failed with error: %s',
             errmsg)
 
 
@@ -576,27 +474,26 @@ def setup_mqtt_filters():
 
     """
     mqtt.callback_filters(
-        filter_iot=cbMqtt_iot,
-        filter_system=cbMqtt_system,
-        filter_fan=cbMqtt_fan,
+        filter_system=cbMqtt_dev_system,
+        filter_fan=cbMqtt_dev_fan,
     )
     try:
         mqtt.subscribe_filters()
     except Exception as errcode:
         logger.error(
-            "MQTT subscribtion to topic filters failed with error code %s",
+            'MQTT subscribtion to topic filters failed with error code %s',
             errcode)
 
 
 def setup_timers():
     """Define dictionary of timers."""
     # Timer 01
-    name = "Timer_mqtt"
-    cfg_section = "TimerMqtt"
+    name = 'Timer_mqtt'
+    cfg_section = 'TimerMqtt'
     # Reconnection period
-    c_period = float(config.option("period_reconnect", cfg_section, 15.0))
+    c_period = float(config.option('period_reconnect', cfg_section, 15.0))
     c_period = max(min(c_period, 180.0), 5.0)
-    logger.debug("Setup timer %s: period = %ss", name, c_period)
+    logger.debug('Setup timer %s: period = %ss', name, c_period)
     # Definition
     timer1 = modTimer.Timer(
         c_period,
@@ -605,6 +502,20 @@ def setup_timers():
         id=name,
     )
     modTimer.register_timer(name, timer1)
+    # Timer 02
+    name = 'Timer_data'
+    # Reconnection period
+    c_period = 5
+    logger.debug('Setup timer %s: period = %ss', name, c_period)
+    # Definition
+    timer2 = modTimer.Timer(
+        c_period,
+        cbTimer_data,
+        name=name,
+        id=name,
+    )
+    modTimer.register_timer(name, timer1)
+    modTimer.register_timer(name, timer2)
     # Start all timers
     modTimer.start_timers()
 
@@ -616,20 +527,23 @@ def setup():
         print(config.get_content())
     # Running mode
     if Script.service:
-        logger.info("Script runs as the service %s.service", Script.name)
+        logger.info('Script runs as the service %s.service', Script.name)
     else:
-        logger.info("Script %s runs in standalone mode", Script.name)
+        logger.info('Script %s runs in standalone mode', Script.name)
+    # Devices initiation
+    global dev_system
+    dev_system = iot_system.System()
 
 
 def loop():
     """Wait for keyboard or system exit."""
     try:
-        logger.info("Script loop started")
+        logger.info('Script loop started')
         while (Script.running):
             time.sleep(0.01)
-        logger.info("Script finished")
+        logger.info('Script finished')
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Script cancelled from keyboard")
+        logger.info('Script cancelled from keyboard')
     finally:
         action_exit()
 
@@ -647,6 +561,6 @@ def main():
 
 
 if __name__ == "__main__":
-    if os.getegid() != 0:
+    if platform.system() == 'Linux' and os.getegid() != 0:
         sys.exit('Script must be run as root')
     main()

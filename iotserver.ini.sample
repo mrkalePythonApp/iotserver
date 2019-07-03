@@ -53,13 +53,15 @@ filter_iot =  %(mqtt_topic_iot)s/#
 ; topic = topicName, topicQos, topicRetain
 ; Example:
 ; fan_dummy = %(mqtt_topic_fan)s/dummy, 0, 1
-system_temp_value = %(mqtt_topic_system_temp)s/val
-system_temp_percentage = %(mqtt_topic_system_temp)s/perc
-; Topics for IoT server
-iot_lwt = %(mqtt_topic_iot_status)s, 0, 1
-iot_command_control = %(mqtt_topic_iot_command)s/control
+lwt = %(mqtt_topic_iot_status)s, 0, 1
+; Topics for microcomputer
+system_temp_cur_value = %(mqtt_topic_system_temp)s/val
+system_temp_max_value = %(mqtt_topic_system_temp)s/max
 ; Topics for cooling fan
-fan_lwt = %(mqtt_topic_fan_status)s, 0, 1
+fan_status_percon = %(mqtt_topic_fan_status)s/perc/on
+fan_status_percoff = %(mqtt_topic_fan_status)s/perc/off
+fan_status_tempon = %(mqtt_topic_fan_status)s/temp/on
+fan_status_tempoff = %(mqtt_topic_fan_status)s/temp/off
 
 [TimerMqtt]
 ; Period in seconds for testing connection and attempting to reconnect
