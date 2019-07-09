@@ -363,8 +363,12 @@ def setup_params():
 def setup_cmdline():
     """Define command line arguments."""
     config_file = Script.fullname + '.ini'
-    log_folder = 'x:/mqtt'
-    # log_folder = '/var/log'
+    if platform.system() == 'Linux':
+        log_folder = '/var/log'
+    elif platform.system() == 'Windows':
+        log_folder = 'c:/Temp'
+    else:
+        log_folder = '.'
 
     parser = argparse.ArgumentParser(
         description='Central IoT server hub and MQTT client, version '
