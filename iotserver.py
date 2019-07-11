@@ -16,8 +16,8 @@ Script provides following functionalities:
   during running.
 
 """
-__version__ = '0.1.0'
-__status__ = 'Alpha'
+__version__ = '0.2.0'
+__status__ = 'Beta'
 __author__ = 'Libor Gabaj'
 __copyright__ = 'Copyright 2019, ' + __author__
 __credits__ = [__author__]
@@ -28,7 +28,6 @@ __email__ = 'libor.gabaj@gmail.com'
 # Standard library modules
 import time
 import os
-import os.path
 import sys
 import argparse
 import logging
@@ -41,6 +40,7 @@ import gbj_pythonlib_sw.mqtt as modMQTT
 import gbj_pythonlib_sw.timer as modTimer
 import gbj_pythonlib_iot.common as iot
 import gbj_pythonlib_iot.system as iot_system
+import gbj_pythonlib_iot.fan as iot_fan
 
 
 ###############################################################################
@@ -67,7 +67,6 @@ config = None  # Object with MQTT configuration file processing
 mqtt = None  # Object for MQTT broker manipulation
 # Devices
 dev_system = None  # Object for processing system (microcomputer) parameters
-dev_fan = None  # Object for processing cooling fan parameters
 
 
 ###############################################################################
@@ -161,14 +160,12 @@ def cbTimer_mqtt_reconnect(*arg, **kwargs):
 
 def cbTimer_data(*arg, **kwargs):
     """Test data."""
-    value = dev_system.get_temperature_current() or 0.0
+    value = dev_system.get_temperature() or 0.0
     perc = dev_system.calculate_temperature_percentage(value) or 0.0
     logger.info(
         'System current temperature: %.1f°C (%.1f%%)',
         value,
         perc)
-    value = dev_system.get_temperature_maximal() or 0.0
-    logger.info('System maximal temperature: %.1f°C', value)
 
 
 def cbMqtt_on_connect(client, userdata, flags, rc):
@@ -266,40 +263,6 @@ def cbMqtt_on_message(client, userdata, message):
         return
 
 
-def cbMqtt_dev_system(client, userdata, message):
-    """Process MQTT data related to microcomputer itself.
-
-    Arguments
-    ---------
-    client : object
-        MQTT client instance for this callback.
-    userdata
-        The private user data.
-    message : MQTTMessage object
-        The object with members `topic`, `payload`, `qos`, `retain`.
-
-    """
-    if not mqtt_message_log(message):
-        return
-    try:
-        value = float(message.payload)
-    except ValueError:
-        logger.warning('Ignored wrong value: %s', message.payload)
-        return
-    # SoC temperature value in centigrades
-    if message.topic == mqtt.topic_name('system_temp_cur_value'):
-        dev_system.set_temperature_current(value)
-    # SoC temperature percentage of maximal allowed temperature
-    elif message.topic == mqtt.topic_name('system_temp_max_value'):
-        dev_system.set_temperature_maximal(value)
-    else:
-        logger.debug(
-            'Unexpected system topic "%s" with value: "%s"',
-            message.topic,
-            message.payload
-        )
-
-
 def cbMqtt_dev_fan(client, userdata, message):
     """Process MQTT data related to the cooling fan.
 
@@ -320,26 +283,24 @@ def cbMqtt_dev_fan(client, userdata, message):
         value = float(message.payload)
     except ValueError:
         value = None
-        return
     # Cooling fan status codes
     if message.topic == mqtt.topic_name('mqtt_topic_fan_status',
                                         mqtt.GROUP_DEFAULT):
         if status in iot.status_map:
-            dev_fan.set_status(iot.get_status_index(status))
+            pass
     # Status parameters
-    elif message.topic == mqtt.topic_name('fan_status_percon') and value:
-        value = dev_system.calculate_temperature_value(value)
-        if value:
-            dev_fan.set_temperature_on(value)
-    elif message.topic == mqtt.topic_name('fan_status_percoff') and value:
-        value = dev_system.calculate_temperature_value(value)
-        if value:
-            dev_fan.set_temperature_off(value)
-    elif message.topic == mqtt.topic_name('fan_status_tempon') and value:
-        dev_fan.set_temperature_on(value)
-    elif message.topic == mqtt.topic_name('fan_status_tempoff') and value:
-        dev_fan.set_temperature_off(value)
-        pass
+    elif message.topic == mqtt.topic_name('fan_status_percon'):
+        if value is not None:
+            pass
+    elif message.topic == mqtt.topic_name('fan_status_percoff'):
+        if value is not None:
+            pass
+    elif message.topic == mqtt.topic_name('fan_status_tempon'):
+        if value is not None:
+            pass
+    elif message.topic == mqtt.topic_name('fan_status_tempoff'):
+        if value is not None:
+            pass
     # Unexpected status
     else:
         logger.debug(
@@ -398,7 +359,7 @@ def setup_cmdline():
     parser.add_argument(
         '-l', '--loglevel',
         choices=['debug', 'info', 'warning', 'error', 'critical'],
-        default='debug',
+        default='info',
         help='Level of logging to a log file.'
     )
     parser.add_argument(
@@ -478,7 +439,6 @@ def setup_mqtt_filters():
 
     """
     mqtt.callback_filters(
-        filter_system=cbMqtt_dev_system,
         filter_fan=cbMqtt_dev_fan,
     )
     try:
@@ -518,9 +478,9 @@ def setup_timers():
         name=name,
         id=name,
     )
+    # Register and start all timers
     modTimer.register_timer(name, timer1)
     modTimer.register_timer(name, timer2)
-    # Start all timers
     modTimer.start_timers()
 
 
