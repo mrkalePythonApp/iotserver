@@ -40,7 +40,6 @@ import gbj_pythonlib_sw.mqtt as modMQTT
 import gbj_pythonlib_sw.timer as modTimer
 import gbj_pythonlib_iot.common as iot
 import gbj_pythonlib_iot.system as iot_system
-import gbj_pythonlib_iot.fan as iot_fan
 
 
 ###############################################################################
@@ -75,40 +74,8 @@ dev_system = None  # Object for processing system (microcomputer) parameters
 def action_exit():
     """Perform all activities right before exiting the script."""
     modTimer.stop_timers()
-    mqtt_publish_iot_lwt(iot.Status.OFFLINE)
+    mqtt_publish_lwt(iot.Status.OFFLINE)
     mqtt.disconnect()
-
-
-###############################################################################
-# MQTT actions
-###############################################################################
-def mqtt_reconnect():
-    """Reconnect to MQTT broker if needed."""
-    if mqtt.get_connected():
-        return True
-
-
-def mqtt_publish_iot_lwt(status):
-    """Publish script status to the MQTT LWT topic."""
-    if not mqtt.get_connected():
-        return
-    cfg_option = Script.lwt
-    cfg_section = mqtt.GROUP_TOPICS
-    message = iot.get_status(status)
-    try:
-        mqtt.publish(message, cfg_option, cfg_section)
-        logger.debug(
-            'Published to LWT MQTT topic %s: %s',
-            mqtt.topic_name(cfg_option, cfg_section),
-            message
-        )
-    except Exception as errmsg:
-        logger.error(
-            'Publishing %s to LWT MQTT topic %s failed: %s',
-            message,
-            mqtt.topic_name(cfg_option, cfg_section),
-            errmsg,
-        )
 
 
 def mqtt_message_log(message):
@@ -143,6 +110,65 @@ def mqtt_message_log(message):
 
 
 ###############################################################################
+# MQTT actions
+###############################################################################
+def mqtt_publish_lwt(status):
+    """Publish script status to the MQTT LWT topic."""
+    if not mqtt.get_connected():
+        return
+    cfg_option = Script.lwt
+    cfg_section = mqtt.GROUP_TOPICS
+    message = iot.get_status(status)
+    try:
+        mqtt.publish(message, cfg_option, cfg_section)
+        logger.debug(
+            'Published to LWT MQTT topic %s: %s',
+            mqtt.topic_name(cfg_option, cfg_section),
+            message
+        )
+    except Exception as errmsg:
+        logger.error(
+            'Publishing %s to LWT MQTT topic %s failed: %s',
+            message,
+            mqtt.topic_name(cfg_option, cfg_section),
+            errmsg,
+        )
+
+
+def mqtt_publish_temperature():
+    """Publish system temperature to the MQTT data topic."""
+    if not mqtt.get_connected():
+        return
+    cfg_section = mqtt.GROUP_TOPICS
+    # Temperature in centigrades
+    cfg_option = 'system_data_temp_val'
+    temperature = dev_system.get_temperature()
+    message = '{:.1f}'.format(temperature)
+    try:
+        mqtt.publish(message, cfg_option, cfg_section)
+        logger.debug(
+            'Published temperature %s°C to MQTT topic %s',
+            message, mqtt.topic_name(cfg_option, cfg_section))
+    except Exception as errmsg:
+        logger.error(
+            'Publishing temperature %s°C to MQTT topic %s failed: %s',
+            message, mqtt.topic_name(cfg_option, cfg_section), errmsg)
+    # Temperature in percentage
+    cfg_option = 'system_data_temp_perc'
+    percentage = dev_system.calculate_temperature_percentage(temperature)
+    message = '{:.1f}'.format(percentage)
+    try:
+        mqtt.publish(message, cfg_option, cfg_section)
+        logger.debug(
+            'Published temperature rate %s%% to MQTT topic %s',
+            message, mqtt.topic_name(cfg_option, cfg_section))
+    except Exception as errmsg:
+        logger.error(
+            'Publishing temperature rate %s%% to MQTT topic %s failed: %s',
+            message, mqtt.topic_name(cfg_option, cfg_section), errmsg)
+
+
+###############################################################################
 # Callback functions
 ###############################################################################
 def cbTimer_mqtt_reconnect(*arg, **kwargs):
@@ -158,14 +184,9 @@ def cbTimer_mqtt_reconnect(*arg, **kwargs):
             errmsg)
 
 
-def cbTimer_data(*arg, **kwargs):
-    """Test data."""
-    value = dev_system.get_temperature() or 0.0
-    perc = dev_system.calculate_temperature_percentage(value) or 0.0
-    logger.info(
-        'System current temperature: %.1f°C (%.1f%%)',
-        value,
-        perc)
+def cbTimer_system(*arg, **kwargs):
+    """Publish SoC temperature."""
+    mqtt_publish_temperature()
 
 
 def cbMqtt_on_connect(client, userdata, flags, rc):
@@ -191,7 +212,7 @@ def cbMqtt_on_connect(client, userdata, flags, rc):
     if rc == 0:
         logger.debug('Connected to %s: %s', str(mqtt), userdata)
         setup_mqtt_filters()
-        mqtt_publish_iot_lwt(iot.Status.ONLINE)
+        mqtt_publish_lwt(iot.Status.ONLINE)
     else:
         logger.error('Connection to MQTT broker failed: %s (rc = %d)',
                      userdata, rc)
@@ -359,7 +380,7 @@ def setup_cmdline():
     parser.add_argument(
         '-l', '--loglevel',
         choices=['debug', 'info', 'warning', 'error', 'critical'],
-        default='info',
+        default='debug',
         help='Level of logging to a log file.'
     )
     parser.add_argument(
@@ -451,14 +472,12 @@ def setup_mqtt_filters():
 
 def setup_timers():
     """Define dictionary of timers."""
+    cfg_section = 'Timers'
     # Timer 01
     name = 'Timer_mqtt'
-    cfg_section = 'TimerMqtt'
-    # Reconnection period
-    c_period = float(config.option('period_reconnect', cfg_section, 15.0))
+    c_period = float(config.option('period_mqtt', cfg_section, 15.0))
     c_period = max(min(c_period, 180.0), 5.0)
     logger.debug('Setup timer %s: period = %ss', name, c_period)
-    # Definition
     timer1 = modTimer.Timer(
         c_period,
         cbTimer_mqtt_reconnect,
@@ -467,20 +486,18 @@ def setup_timers():
     )
     modTimer.register_timer(name, timer1)
     # Timer 02
-    name = 'Timer_data'
-    # Reconnection period
-    c_period = 5
+    name = 'Timer_system'
+    c_period = float(config.option('period_soc', cfg_section, 5.0))
+    c_period = max(min(c_period, 120.0), 1.0)
     logger.debug('Setup timer %s: period = %ss', name, c_period)
-    # Definition
     timer2 = modTimer.Timer(
         c_period,
-        cbTimer_data,
+        cbTimer_system,
         name=name,
         id=name,
     )
-    # Register and start all timers
-    modTimer.register_timer(name, timer1)
     modTimer.register_timer(name, timer2)
+    # Start all timers
     modTimer.start_timers()
 
 

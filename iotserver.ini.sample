@@ -7,12 +7,15 @@
 ; trailing '/#' it can be used as a topic filter.
 mqtt_topic_server = server
 ;
+mqtt_topic_script = %(mqtt_topic_server)s/iot
+mqtt_topic_script_status = %(mqtt_topic_script)s/state
+;
+mqtt_topic_system = %(mqtt_topic_server)s/soc
+mqtt_topic_system_data = %(mqtt_topic_system)s/data
+;
 mqtt_topic_fan = %(mqtt_topic_server)s/fan
 mqtt_topic_fan_status = %(mqtt_topic_fan)s/state
 mqtt_topic_fan_command = %(mqtt_topic_fan)s/cmd
-;
-mqtt_topic_iot = %(mqtt_topic_server)s/iot
-mqtt_topic_iot_status = %(mqtt_topic_iot)s/state
 
 [MQTTbroker]
 ; Hardcoded default - the hostname
@@ -47,18 +50,25 @@ filter_fan =  %(mqtt_topic_fan)s/#
 ; topic = topicName, topicQos, topicRetain
 ; Example:
 ; fan_dummy = %(mqtt_topic_fan)s/dummy, 0, 1
-lwt = %(mqtt_topic_iot_status)s, 0, 1
+lwt = %(mqtt_topic_script_status)s, 0, 1
+; Topics for system
+system_data_temp_val = %(mqtt_topic_system_data)s/temp/val
+system_data_temp_perc = %(mqtt_topic_system_data)s/temp/perc
 ; Topics for cooling fan
 fan_status_percon = %(mqtt_topic_fan_status)s/perc/on
 fan_status_percoff = %(mqtt_topic_fan_status)s/perc/off
 fan_status_tempon = %(mqtt_topic_fan_status)s/temp/on
 fan_status_tempoff = %(mqtt_topic_fan_status)s/temp/off
 
-[TimerMqtt]
+[Timers]
 ; Period in seconds for testing connection and attempting to reconnect
 ; to a MQTT broker.
 ; Hardcoded default 15.0s, hardcoded valid range 5 ~ 180s
-period_reconnect = 30.0
+period_mqtt = 30.0
+; Period in seconds for publishing status data of system, usually current
+; temperature.
+; Hardcoded default 5.0s, hardcoded valid range 1 ~ 120s
+period_soc = 5.0
 
 [ThingSpeak]
 ; Hardcoded default - the hostname
