@@ -31,7 +31,6 @@ import os
 import sys
 import argparse
 import logging
-import platform
 
 # Third party modules
 import gbj_pythonlib_sw.utils as modUtils
@@ -135,37 +134,45 @@ def mqtt_publish_lwt(status):
         )
 
 
-def mqtt_publish_temperature():
-    """Publish system temperature to the MQTT data topic."""
-    if not mqtt.get_connected():
-        return
-    cfg_section = mqtt.GROUP_TOPICS
-    # Temperature in centigrades
-    cfg_option = 'system_data_temp_val'
+def mqtt_publish_temperature_val():
+    """Publish system temperature value in centigrades to MQTT data topic."""
     temperature = dev_system.get_temperature()
     message = '{:.1f}'.format(temperature)
-    try:
-        mqtt.publish(message, cfg_option, cfg_section)
-        logger.debug(
-            'Published temperature %s°C to MQTT topic %s',
-            message, mqtt.topic_name(cfg_option, cfg_section))
-    except Exception as errmsg:
-        logger.error(
-            'Publishing temperature %s°C to MQTT topic %s failed: %s',
-            message, mqtt.topic_name(cfg_option, cfg_section), errmsg)
-    # Temperature in percentage
-    cfg_option = 'system_data_temp_perc'
-    percentage = dev_system.calculate_temperature_percentage(temperature)
+    if mqtt.get_connected():
+        cfg_section = mqtt.GROUP_TOPICS
+        cfg_option = 'system_data_temp_val'
+        try:
+            mqtt.publish(message, cfg_option, cfg_section)
+            logger.debug(
+                'Published temperature %s°C to MQTT topic %s',
+                message, mqtt.topic_name(cfg_option, cfg_section))
+        except Exception as errmsg:
+            logger.error(
+                'Publishing temperature %s°C to MQTT topic %s failed: %s',
+                message, mqtt.topic_name(cfg_option, cfg_section), errmsg)
+    else:
+        logger.debug('System temperature value %s°C', message)
+
+
+def mqtt_publish_temperature_perc():
+    """Publish system temperature rate in per cents to MQTT data topic."""
+    percentage = dev_system.get_percentage()
     message = '{:.1f}'.format(percentage)
-    try:
-        mqtt.publish(message, cfg_option, cfg_section)
-        logger.debug(
-            'Published temperature rate %s%% to MQTT topic %s',
-            message, mqtt.topic_name(cfg_option, cfg_section))
-    except Exception as errmsg:
-        logger.error(
-            'Publishing temperature rate %s%% to MQTT topic %s failed: %s',
-            message, mqtt.topic_name(cfg_option, cfg_section), errmsg)
+    if mqtt.get_connected():
+        cfg_section = mqtt.GROUP_TOPICS
+        cfg_option = 'system_data_temp_perc'
+        message = '{:.1f}'.format(percentage)
+        try:
+            mqtt.publish(message, cfg_option, cfg_section)
+            logger.debug(
+                'Published temperature rate %s%% to MQTT topic %s',
+                message, mqtt.topic_name(cfg_option, cfg_section))
+        except Exception as errmsg:
+            logger.error(
+                'Publishing temperature rate %s%% to MQTT topic %s failed: %s',
+                message, mqtt.topic_name(cfg_option, cfg_section), errmsg)
+    else:
+        logger.debug('System temperature rate %s%%', message)
 
 
 ###############################################################################
@@ -186,7 +193,8 @@ def cbTimer_mqtt_reconnect(*arg, **kwargs):
 
 def cbTimer_system(*arg, **kwargs):
     """Publish SoC temperature."""
-    mqtt_publish_temperature()
+    mqtt_publish_temperature_val()
+    mqtt_publish_temperature_perc()
 
 
 def cbMqtt_on_connect(client, userdata, flags, rc):
@@ -345,9 +353,9 @@ def setup_params():
 def setup_cmdline():
     """Define command line arguments."""
     config_file = Script.fullname + '.ini'
-    if platform.system() == 'Linux':
+    if modUtils.linux():
         log_folder = '/var/log'
-    elif platform.system() == 'Windows':
+    elif modUtils.windows():
         log_folder = 'c:/Temp'
     else:
         log_folder = '.'
@@ -374,7 +382,7 @@ def setup_cmdline():
     parser.add_argument(
         '-v', '--verbose',
         choices=['debug', 'info', 'warning', 'error', 'critical'],
-        default='debug',
+        default='info',
         help='Level of logging to the console.'
     )
     parser.add_argument(
@@ -542,6 +550,6 @@ def main():
 
 
 if __name__ == "__main__":
-    if platform.system() == 'Linux' and os.getegid() != 0:
+    if modUtils.linux() and os.getegid() != 0:
         sys.exit('Script must be run as root')
     main()
