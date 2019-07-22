@@ -63,6 +63,7 @@ cmdline = None  # Object with command line arguments
 logger = None  # Object with standard logging
 config = None  # Object with MQTT configuration file processing
 mqtt = None  # Object for MQTT broker manipulation
+thingspeak = None  # Object for ThingSpeak MQTT manipulation
 # Devices
 dev_system = None  # Object for processing system (microcomputer) parameters
 
@@ -195,6 +196,8 @@ def cbTimer_system(*arg, **kwargs):
     """Publish SoC temperature."""
     mqtt_publish_temperature_val()
     mqtt_publish_temperature_perc()
+    thingspeak.set_field(thingspeak.FIELD_SOC_TEMP,
+                         dev_system.get_temperature())
 
 
 def cbMqtt_on_connect(client, userdata, flags, rc):
@@ -478,6 +481,14 @@ def setup_mqtt_filters():
             errcode)
 
 
+def setup_thingspeak():
+    """Define ThingSpeak management."""
+    global thingspeak
+    thingspeak = modMQTT.ThingSpeak(config)
+    thingspeak.FIELD_SOC_TEMP = int(config.option("field_soc_temp",
+                                    thingspeak.GROUP_BROKER, 1))
+
+
 def setup_timers():
     """Define dictionary of timers."""
     cfg_section = 'Timers'
@@ -501,6 +512,18 @@ def setup_timers():
     timer2 = modTimer.Timer(
         c_period,
         cbTimer_system,
+        name=name,
+        id=name,
+    )
+    modTimer.register_timer(name, timer2)
+    # Timer 03
+    name = 'Timer_thingspeak'
+    c_period = float(config.option('period_thingspeak', cfg_section, 60.0))
+    c_period = max(min(c_period, 600.0), 15.0)
+    logger.debug('Setup timer %s: period = %ss', name, c_period)
+    timer2 = modTimer.Timer(
+        c_period,
+        thingspeak.publish,
         name=name,
         id=name,
     )

@@ -69,6 +69,10 @@ period_mqtt = 30.0
 ; temperature.
 ; Hardcoded default 5.0s, hardcoded valid range 1 ~ 120s
 period_soc = 5.0
+; Period in seconds for publishing to the ThingSpeak cloud.
+; Should be at least 15.0 s.
+; Hardcoded default 60.0s = 1.0 min., hardcoded valid range 15 ~ 600s
+period_thingspeak = 60.0
 
 [ThingSpeak]
 ; Hardcoded default - the hostname
@@ -81,18 +85,9 @@ mqtt_api_key = <ThingSpeak_mqtt_apikey>
 ; Testing channel Test - Chalupa
 channel_id = <ThingSpeak_channel_id>
 write_api_key = <ThingSpeak_write_apikey>
-; Publish delay limit in seconds
-; Published messages sent sooner after previous messages are ignored by ThingSpeak
-; Hardcoded default 15.0s
-publish_delay = 15.0
 ; Data field numbers 1 .. 8
 ; Hardcoded default 1
-field_temp = 1
-; Hardcoded default 2
-field_fan = 2
-; Period in seconds for publishing to the cloud. Should be longer than publish delay.
-; Hardcoded default 600.0s = 1.0 min
-period_publish = 60.0
+field_soc_temp = 1
 
 [Blynk]
 blynk_auth = <Blynk_apikey>
