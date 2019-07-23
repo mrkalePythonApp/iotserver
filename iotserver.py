@@ -385,7 +385,7 @@ def setup_cmdline():
     parser.add_argument(
         '-v', '--verbose',
         choices=['debug', 'info', 'warning', 'error', 'critical'],
-        default='info',
+        default='debug',
         help='Level of logging to the console.'
     )
     parser.add_argument(
@@ -567,6 +567,7 @@ def main():
     setup_logger()
     setup_config()
     setup_mqtt()
+    setup_thingspeak()
     setup_timers()
     setup()
     loop()
