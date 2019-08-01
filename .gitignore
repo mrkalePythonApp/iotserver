@@ -1,6 +1,7 @@
 # Sensitive files
 iotserver.ini
 *.todo
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
