@@ -137,8 +137,7 @@ def mqtt_publish_lwt(status):
 
 def mqtt_publish_temperature_val():
     """Publish system temperature value in centigrades to MQTT data topic."""
-    temperature = dev_system.get_temperature()
-    message = '{:.1f}'.format(temperature)
+    message = f'{dev_system.temperature:.1f}'
     if mqtt.get_connected():
         cfg_section = mqtt.GROUP_TOPICS
         cfg_option = 'system_data_temp_val'
@@ -157,12 +156,10 @@ def mqtt_publish_temperature_val():
 
 def mqtt_publish_temperature_perc():
     """Publish system temperature rate in per cents to MQTT data topic."""
-    percentage = dev_system.get_percentage()
-    message = '{:.1f}'.format(percentage)
+    message = f'{dev_system.percentage:.1f}'
     if mqtt.get_connected():
         cfg_section = mqtt.GROUP_TOPICS
         cfg_option = 'system_data_temp_perc'
-        message = '{:.1f}'.format(percentage)
         try:
             mqtt.publish(message, cfg_option, cfg_section)
             logger.debug(
@@ -196,8 +193,7 @@ def cbTimer_system(*arg, **kwargs):
     """Publish SoC temperature."""
     mqtt_publish_temperature_val()
     mqtt_publish_temperature_perc()
-    thingspeak.set_field(thingspeak.FIELD_SOC_TEMP,
-                         dev_system.get_temperature())
+    thingspeak.set_field(thingspeak.FIELD_SOC_TEMP, dev_system.temperature)
 
 
 def cbMqtt_on_connect(client, userdata, flags, rc):
