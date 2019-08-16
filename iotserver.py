@@ -114,7 +114,7 @@ def mqtt_message_log(message):
 ###############################################################################
 def mqtt_publish_lwt(status):
     """Publish script status to the MQTT LWT topic."""
-    if not mqtt.get_connected():
+    if not mqtt.connected:
         return
     cfg_option = Script.lwt
     cfg_section = mqtt.GROUP_TOPICS
@@ -138,7 +138,7 @@ def mqtt_publish_lwt(status):
 def mqtt_publish_temperature_val():
     """Publish system temperature value in centigrades to MQTT data topic."""
     message = f'{dev_system.temperature:.1f}'
-    if mqtt.get_connected():
+    if mqtt.connected:
         cfg_section = mqtt.GROUP_TOPICS
         cfg_option = 'system_data_temp_val'
         try:
@@ -157,7 +157,7 @@ def mqtt_publish_temperature_val():
 def mqtt_publish_temperature_perc():
     """Publish system temperature rate in per cents to MQTT data topic."""
     message = f'{dev_system.percentage:.1f}'
-    if mqtt.get_connected():
+    if mqtt.connected:
         cfg_section = mqtt.GROUP_TOPICS
         cfg_option = 'system_data_temp_perc'
         try:
@@ -178,7 +178,7 @@ def mqtt_publish_temperature_perc():
 ###############################################################################
 def cbTimer_mqtt_reconnect(*arg, **kwargs):
     """Execute MQTT reconnect."""
-    if mqtt.get_connected():
+    if mqtt.connected:
         return
     logger.warning('Reconnecting to MQTT broker')
     try:
@@ -193,7 +193,7 @@ def cbTimer_system(*arg, **kwargs):
     """Publish SoC temperature."""
     mqtt_publish_temperature_val()
     mqtt_publish_temperature_perc()
-    thingspeak.set_field(thingspeak.FIELD_SOC_TEMP, dev_system.temperature)
+    thingspeak.store_field(thingspeak.FIELD_SOC_TEMP, dev_system.temperature)
 
 
 def cbMqtt_on_connect(client, userdata, flags, rc):
@@ -526,7 +526,7 @@ def setup():
     """Global initialization."""
     # Print configuration file to the console
     if cmdline.configuration:
-        print(config.get_content())
+        print(config.content)
     # Running mode
     msg = \
         f'Script runs as a ' \
