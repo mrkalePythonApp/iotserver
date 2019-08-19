@@ -74,6 +74,14 @@ period_soc = 5.0
 ; Hardcoded default 60.0s = 1.0 min., hardcoded valid range 15 ~ 600s
 period_thingspeak = 60.0
 
+[System]
+; Percentage rounding to provided integer of decimals.
+; Hardcoded default 1, valid range 0 ~ 6 limited in code
+round_perc = 1
+; Temperature rounding to provided integer of decimals.
+; Hardcoded default 1, valid range 0 ~ 6 limited in code
+round_temp = 1
+
 [ThingSpeak]
 ; Hardcoded default - the hostname
 clientid = <thingspeak_clientid>

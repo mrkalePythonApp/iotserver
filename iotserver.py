@@ -16,7 +16,7 @@ Script provides following functionalities:
   during running.
 
 """
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 __status__ = 'Beta'
 __author__ = 'Libor Gabaj'
 __copyright__ = 'Copyright 2019, ' + __author__
@@ -109,6 +109,37 @@ def mqtt_message_log(message):
     return message.payload is not None
 
 
+def system_init():
+    """Set all system parameters to initial values."""
+    round_def = 1
+    round_min = 0
+    round_max = 6
+    try:
+        dev_system.round_perc = int(
+            config.option('round_perc', 'System', round_def))
+    except ValueError:
+        dev_system.round_perc = round_def
+    dev_system.round_perc = max(
+        min(dev_system.round_perc, round_max), round_min)
+    try:
+        dev_system.round_temp = int(
+            config.option('round_temp', 'System', round_def))
+    except ValueError:
+        dev_system.round_temp = round_def
+    dev_system.round_temp = max(
+        min(dev_system.round_temp, round_max), round_min)
+
+
+def round_temp(value):
+    """Round temperature for publishing."""
+    return round(value, dev_system.round_temp)
+
+
+def round_perc(value):
+    """Round percentage for publishing to MQTT."""
+    return round(value, dev_system.round_perc)
+
+
 ###############################################################################
 # MQTT actions
 ###############################################################################
@@ -137,7 +168,7 @@ def mqtt_publish_lwt(status):
 
 def mqtt_publish_temperature_val():
     """Publish system temperature value in centigrades to MQTT data topic."""
-    message = f'{dev_system.temperature:.1f}'
+    message = round_temp(dev_system.temperature)
     if mqtt.connected:
         cfg_section = mqtt.GROUP_TOPICS
         cfg_option = 'system_data_temp_val'
@@ -156,7 +187,7 @@ def mqtt_publish_temperature_val():
 
 def mqtt_publish_temperature_perc():
     """Publish system temperature rate in per cents to MQTT data topic."""
-    message = f'{dev_system.percentage:.1f}'
+    message = round_perc(dev_system.percentage)
     if mqtt.connected:
         cfg_section = mqtt.GROUP_TOPICS
         cfg_option = 'system_data_temp_perc'
@@ -535,6 +566,7 @@ def setup():
     # Devices initiation
     global dev_system
     dev_system = iot_system.System()
+    system_init()
 
 
 def loop():
